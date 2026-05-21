@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
+import TacticalMap from './TacticalMap';
 import { Route, MapPin, Loader2, Sparkles, AlertTriangle, ChevronRight } from 'lucide-react';
 import { generatePatrolRoute } from '../services/api';
 
-const PatrolCommand = () => {
+const PatrolCommand = ({ activeAlerts = [] }) => {
   const [routePlan, setRoutePlan] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -118,14 +119,19 @@ const PatrolCommand = () => {
 
       {/* Output Display Area */}
       {routePlan && (
-        <div className="mt-8 relative z-10 border-t border-white/10 pt-6">
-          <div className="flex items-center gap-2 mb-2">
+        <div className="mt-8 relative z-10 border-t border-white/10 pt-6 animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="flex items-center gap-2 mb-4">
             <MapPin className="text-[#20C997] size-4 animate-pulse" />
             <span className="text-xs font-mono text-emerald-100/50 tracking-widest uppercase">Tactical Command Link Established</span>
           </div>
           
-          {/* Render our beautifully formatted UI instead of raw text */}
-          {renderTacticalUI(routePlan)}
+          {/* --- THE NEW TACTICAL MAP IS RENDERED HERE --- */}
+          <TacticalMap activeAlerts={activeAlerts} showRoute={true} />
+
+          {/* Render our beautifully formatted UI below the map */}
+          <div className="mt-6">
+            {renderTacticalUI(routePlan)}
+          </div>
           
         </div>
       )}

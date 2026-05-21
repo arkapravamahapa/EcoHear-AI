@@ -27,7 +27,7 @@ const AlertSystem = ({ logs = [] }) => {
       </h2>
 
       {/* --- NEW PREDICTIVE ROUTING CARD --- */}
-      <PatrolCommand />
+      <PatrolCommand activeAlerts={activeAlerts} />
 
       <div className="space-y-4">
         {activeAlerts.length === 0 ? (

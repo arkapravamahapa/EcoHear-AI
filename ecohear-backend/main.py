@@ -1,3 +1,4 @@
+import requests
 import os
 import shutil
 import sqlite3
@@ -82,6 +83,35 @@ async def predict_audio(file: UploadFile = File(...)):
     )
     conn.commit()
     conn.close()
+    
+    # --- NEW: EDGE TO CENTRAL SERVER ROUTING LOGIC ---
+    if alert:
+        # If it's a chainsaw/gunshot, forward it to the central cloud!
+        print(f"\n🚨 ABNORMAL SOUND DETECTED! Forwarding {file.filename} to Central Server...")
+        
+        # In a real deployment, this would be your central server URL
+        CENTRAL_SERVER_URL = "https://echohear-central-cloud.example.com/api/alerts"
+        
+        alert_payload = {
+            "node_id": "Edge-Station-Alpha", 
+            "filename": file.filename,
+            "prediction": prediction,
+            "confidence": confidence,
+            "timestamp": timestamp
+        }
+        
+        try:
+            # We use a short timeout so the edge server doesn't freeze if the cloud is down
+            # (Uncomment the line below in production to actually send the data via HTTP POST)
+            # response = requests.post(CENTRAL_SERVER_URL, json=alert_payload, timeout=3)
+            print("✅ Successfully routed to Central Server.\n")
+        except Exception as e:
+            print(f"❌ Failed to reach Central Server: {e}\n")
+            
+    else:
+        # If it's a bird/normal, keep it local.
+        print(f"\n🌿 Normal sound ({prediction}). Kept locally on Edge Server to save bandwidth.\n")
+    # -------------------------------------------------
     
     return {
         "prediction": prediction,

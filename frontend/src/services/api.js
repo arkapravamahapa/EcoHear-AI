@@ -44,4 +44,14 @@ export const sendChatMessage = async (message) => {
   }
 };
 
+export const generatePatrolRoute = async () => {
+  try {
+    const response = await api.get('/generate-patrol');
+    return response.data;
+  } catch (error) {
+    console.error("Patrol Route API Error:", error);
+    throw error;
+  }
+};
+
 export default api;

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AlertTriangle, Clock, Crosshair, CheckCircle2, ShieldAlert } from 'lucide-react';
+import PatrolCommand from './PatrolCommand';
 
 const AlertSystem = ({ logs = [] }) => {
   // Filter the logs to find ONLY the ones where the AI triggered an alert
@@ -15,7 +16,7 @@ const AlertSystem = ({ logs = [] }) => {
       [index]: true
     }));
     
-    // FIX: Changed from print() to console.log() so it doesn't open a PDF prompt!
+    // Log to browser developer console instead of triggering a PDF print
     console.log(`🚨 Dispatch Protocol Initiated for: ${alertType} at Sector 4`);
   };
 
@@ -24,6 +25,9 @@ const AlertSystem = ({ logs = [] }) => {
       <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
         <AlertTriangle className="text-red-500 size-5" /> Threat Dispatch Center
       </h2>
+
+      {/* --- NEW PREDICTIVE ROUTING CARD --- */}
+      <PatrolCommand />
 
       <div className="space-y-4">
         {activeAlerts.length === 0 ? (

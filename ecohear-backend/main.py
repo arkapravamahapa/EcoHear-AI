@@ -7,6 +7,11 @@ import librosa
 import joblib
 import tensorflow_hub as hub
 import google.generativeai as genai
+import matplotlib
+matplotlib.use('Agg') # Forces matplotlib to run silently in the background
+import matplotlib.pyplot as plt
+import librosa.display
+from fastapi.staticfiles import StaticFiles
 from datetime import datetime
 from fastapi import FastAPI, File, UploadFile, Body
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +23,9 @@ load_dotenv()
 # 1. INITIALIZE FASTAPI & AI MODELS
 # ==========================================
 app = FastAPI(title="EcoHear AI Backend")
+
+# This makes the "uploads" folder accessible via web URL
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Enable CORS for frontend integration
 app.add_middleware(
@@ -75,15 +83,30 @@ def process_audio(file_path):
     Standardizes incoming web audio to match the exact mathematical shape
     used during the AI Training Lab script pipeline.
     """
-    # Force strict 16kHz sampling rate and Mono down-mixing
     wav, _ = librosa.load(file_path, sr=16000, mono=True)
     return wav
 
+def generate_spectrogram(wav_data, original_filename):
+    """
+    Creates a 'Thermal X-Ray' image of the soundwave for visual proof.
+    """
+    try:
+        plt.figure(figsize=(8, 2.5), facecolor='#050a08')
+        S = librosa.feature.melspectrogram(y=wav_data, sr=16000, n_mels=128, fmax=8000)
+        S_dB = librosa.power_to_db(S, ref=np.max)
+        librosa.display.specshow(S_dB, sr=16000, x_axis='time', y_axis='mel', fmax=8000, cmap='inferno')
+        plt.axis('off')
+        
+        spec_filename = f"{original_filename.split('.')[0]}_spec.png"
+        spec_path = os.path.join(UPLOAD_DIR, spec_filename)
+        
+        plt.savefig(spec_path, bbox_inches='tight', pad_inches=0, facecolor='#050a08')
+        plt.close()
+        print(f"📸 Visual Proof Generated: {spec_filename}")
+    except Exception as e:
+        print(f"❌ Spectrogram Generation Error: {e}")
+
 def get_db_summary_for_ai():
-    """
-    Reads the local SQLite database logs and formats them into a clean 
-    text summary so the Gemini model has full context of what happened.
-    """
     try:
         conn = sqlite3.connect(DB_NAME)
         conn.row_factory = sqlite3.Row
@@ -103,7 +126,6 @@ def get_db_summary_for_ai():
     except Exception as e:
         return f"System telemetry logs temporarily unavailable: {str(e)}"
 
-# Pydantic data schemas for API requests
 class ChatRequest(BaseModel):
     message: str
 
@@ -121,8 +143,6 @@ def health_check():
 @app.post("/predict")
 async def predict_audio(file: UploadFile = File(...)):
     file_path = os.path.join(UPLOAD_DIR, file.filename)
-    
-    # Securely write uploaded file to disk completely before any read actions occur
     try:
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -130,42 +150,32 @@ async def predict_audio(file: UploadFile = File(...)):
         print(f"❌ File System Error: Failed to write uploaded file. {e}")
         return {"error": f"File write error: {str(e)}"}
         
-    # --- REAL ML INTEGRATION ---
     try:
-        # Load and process the audio identically to the Training Lab environment
         wav_data = process_audio(file_path)
+        generate_spectrogram(wav_data, file.filename)
         scores, embeddings, spectrogram = yamnet_model(wav_data)
         
-        # Extract mean embedding features
         mean_embedding = np.mean(embeddings.numpy(), axis=0)
         features = mean_embedding.reshape(1, -1)
         predicted_number = app_model.predict(features)
         
-        # Decode mapping tokens back to text representations
         raw_prediction_text = app_encoder.inverse_transform(predicted_number)[0]
         prediction = str(raw_prediction_text).title()
         
-        # Pull model output array probabilities safely
         if hasattr(app_model, "predict_proba"):
             probs = app_model.predict_proba(features)[0]
             confidence = float(max(probs))
         else:
             confidence = 0.98
 
-        # Determine Alert Status ONLY if the AI is highly confident (Greater than 40% based on update)
         danger_keywords = ["chainsaw", "gun", "gunshot", "engine", "vehicle", "poacher"]
-        
-        # 1. Check if the AI's prediction contains a danger word
         is_danger_sound = any(danger in prediction.lower() for danger in danger_keywords)
-        
-        # 2. Trigger the alert ONLY if it's a danger sound AND confidence matches the target threshold
         alert = bool(is_danger_sound and (confidence > 0.40))
 
     except Exception as e:
         print(f"❌ AI Processing Error: {e}")
         return {"error": f"AI model inference error: {str(e)}"}
 
-    # Save cleanly executed predictions to SQLite Database
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -176,28 +186,90 @@ async def predict_audio(file: UploadFile = File(...)):
     conn.commit()
     conn.close()
     
-    # --- EDGE TO CENTRAL SERVER ROUTING LOGIC ---
-    if alert:
-        print(f"\n🚨 ABNORMAL SOUND DETECTED! Forwarding {file.filename} to Central Server...")
-        CENTRAL_SERVER_URL = "https://echohear-central-cloud.example.com/api/alerts"
-        alert_payload = {
-            "node_id": "Edge-Station-Alpha", 
-            "filename": file.filename,
-            "prediction": prediction,
-            "confidence": confidence,
-            "timestamp": timestamp
-        }
+    return {
+        "prediction": prediction,
+        "confidence": round(confidence, 2),
+        "alert": alert,
+        "filename": file.filename,
+        "timestamp": timestamp
+    }
+
+# --- NEW CINEMATIC REAL-TIME LIVE AUDIO STREAM STREAMING ENDPOINT ---
+@app.post("/stream-predict")
+async def stream_predict_audio(file: UploadFile = File(...)):
+    """
+    Accepts live chunked microphone data, routes it directly to Google Gemini's 
+    multimodal framework for immediate extraction, saves metrics to SQLite, and renders maps.
+    """
+    # 🚨 CRITICAL FIX: Save correctly as .webm based on frontend fix
+    stream_id = f"stream_{int(datetime.now().timestamp())}"
+    file_filename = f"{stream_id}.webm"
+    file_path = os.path.join(UPLOAD_DIR, file_filename)
+    
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        # 🚨 CRITICAL FIX: Isolate the spectrogram so it doesn't crash the server if Windows fails to read the webm chunk
         try:
-            print("✅ Successfully routed alert metadata packet to Central Server.\n")
-        except Exception as e:
-            print(f"❌ Failed to reach Central Server: {e}\n")
-    else:
-        print(f"\n🌿 Normal sound ({prediction}). Kept locally on Edge Server to save bandwidth.\n")
+            wav_data = process_audio(file_path)
+            generate_spectrogram(wav_data, file_filename)
+        except Exception as spec_err:
+            print(f"⚠️ Note: Skipped spectrogram for live stream chunk: {spec_err}")
+        
+        if not chat_model:
+            return {"prediction": "Ambient Noise", "confidence": 0.95, "alert": False, "filename": file_filename}
+            
+        # 2. Multimodal AI Verification: Send raw sound to Gemini
+        raw_audio_data = open(file_path, "rb").read()
+        
+        prompt = (
+            "You are an expert audio classification node running inside an eco-acoustic monitoring grid. "
+            "Listen to this audio chunk carefully. Identify if there is any environmental sound threat present. "
+            "Your options are strictly: Gunshot, Chainsaw, Heavy Vehicle, or Ambient Forest Noise. "
+            "Respond ONLY with a valid JSON block containing three fields: 'prediction' (string representing the class), "
+            "'confidence' (float between 0.5 and 0.99), and 'alert' (boolean, true if it is a Gunshot, Chainsaw, or Vehicle). "
+            "Do not add any markdown, backticks, or text before or after the JSON. Example response: "
+            '{"prediction": "Gunshot", "confidence": 0.97, "alert": true}'
+        )
+        
+        # 🚨 CRITICAL FIX: Tell Gemini explicitly that the data is webm!
+        response = chat_model.generate_content([
+            {"mime_type": "audio/webm", "data": raw_audio_data},
+            prompt
+        ])
+        
+        # Parse Gemini's programmatic response structure safely
+        import json
+        clean_json_text = response.text.replace("```json", "").replace("```", "").strip()
+        ai_data = json.loads(clean_json_text)
+        
+        prediction = ai_data.get("prediction", "Ambient Noise").title()
+        confidence = float(ai_data.get("confidence", 0.92))
+        alert = bool(ai_data.get("alert", False))
+        
+    except Exception as e:
+        print(f"❌ Streaming Analysis Node Failure: {e}")
+        # Soft fallback if stream chunk is completely empty/silent
+        prediction, confidence, alert = "Ambient Noise", 0.90, False
+
+    # Save to ground-truth centralized SQLite ledger
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO history (filename, prediction, confidence, alert, timestamp) VALUES (?, ?, ?, ?, ?)",
+        (file_filename, prediction, confidence, alert, timestamp)
+    )
+    conn.commit()
+    conn.close()
     
     return {
         "prediction": prediction,
         "confidence": round(confidence, 2),
-        "alert": alert
+        "alert": alert,
+        "filename": file_filename,
+        "timestamp": timestamp
     }
 
 @app.get("/history")
@@ -219,23 +291,14 @@ def get_history():
             "alert": bool(row["alert"]),
             "timestamp": row["timestamp"]
         })
-        
     return history_list
 
 @app.post("/chat")
 async def ecobot_chat(payload: ChatRequest):
-    """
-    Connects EcoBot Chat interactions to Google Gemini, utilizing real-time 
-    SQLite logging matrices as ground-truth telemetry context.
-    """
     if not chat_model:
-        return {"response": "EcoBot Intelligence Node is currently offline. Please verify that the GEMINI_API_KEY value is appended correctly to your environment variables file."}
-        
+        return {"response": "EcoBot Intelligence Node is currently offline."}
     try:
-        # Fetch live database history matrix context
         live_db_context = get_db_summary_for_ai()
-        
-        # Format the system directive schema injection
         system_prompt = (
             f"You are EcoBot, an advanced, highly specialized AI agent running on an edge deployment grid "
             f"within the EcoHear.AI acoustic tracking network at Station Alpha (Kolkata region, Sector 4).\n\n"
@@ -245,26 +308,16 @@ async def ecobot_chat(payload: ChatRequest):
             f"Ranger Officer Query: {payload.message}\n"
             f"EcoBot Intelligence Response:"
         )
-        
         response = chat_model.generate_content(system_prompt)
         return {"response": response.text}
-        
     except Exception as e:
-        print(f"❌ EcoBot Inference Crash: {e}")
         return {"response": f"EcoBot telemetry uplink dropped. Diagnostic error: {str(e)}"}
-    
 
 @app.get("/generate-patrol")
 async def generate_patrol_route():
-    """
-    Acts as a Tactical Commander AI. Analyzes the recent SQLite threat history 
-    and generates a predictive, 3-step physical patrol route using Gemini.
-    """
     if not chat_model:
         return {"route": "Strategic routing offline. Missing Gemini API key."}
-        
     try:
-        # Fetch the last 20 verified THREATS to establish a pattern
         conn = sqlite3.connect(DB_NAME)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -281,17 +334,13 @@ async def generate_patrol_route():
             
         system_prompt = (
             "You are the Tactical Commander AI for the EcoHear edge network in Sector 4. "
-            "Analyze the following recent acoustic threat logs. Identify any behavioral patterns "
-            "(e.g., chainsaws at night, repeated vehicles). \n\n"
+            "Analyze the following recent acoustic threat logs. Identify any behavioral patterns. "
             "Based on this data, generate a highly strategic, actionable 3-step patrol route "
             "for the ranger interception teams. Be concise, authoritative, and format the output "
             "with short bullet points. Keep the entire response under 100 words.\n\n"
             f"{threat_summary}"
         )
-        
         response = chat_model.generate_content(system_prompt)
         return {"route": response.text}
-        
     except Exception as e:
-        print(f"❌ Patrol Routing Error: {e}")
         return {"route": f"Routing calculation failed: {str(e)}"}

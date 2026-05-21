@@ -1,4 +1,6 @@
-# Logs
+# ==========================================
+# 1. CORE LOGS & SYSTEM FILES
+# ==========================================
 logs
 *.log
 npm-debug.log*
@@ -6,23 +8,62 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+.DS_Store
+Thumbs.db
 
+# ==========================================
+# 2. LOCAL CREDENTIALS & SECURITY ENVIRONS (CRITICAL)
+# ==========================================
+.env
+.env.local
+.env.*.local
+*.env
+config.json
+
+# ==========================================
+# 3. ECOHEAR BACKEND & SQLITE STORAGE
+# ==========================================
+# Prevents sharing your live demo history logs
+*.db
+*.db-journal
+*.sqlite3
+uploads/
+**/uploads/
+
+# ==========================================
+# 4. MACHINE LEARNING WEIGHTS & PYTHON ARTIFACTS
+# ==========================================
+# Blocks massive trained AI brains and tracking files from clogging Git
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+ENV/
+*.pkl
+*.joblib
+*.h5
+*.onnx
+
+# ==========================================
+# 5. FRONTEND BUILD & DEPENDENCY PACKAGES
+# ==========================================
 node_modules
-dist
-dist-ssr
-*.local
+/dist
+/dist-ssr
+out/
+build/
 
-# Editor directories and files
+# ==========================================
+# 6. IDE & EDITOR DIRECTORIES
+# ==========================================
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-# Local environment variables
-.env
-.env.local
-.env.*.local

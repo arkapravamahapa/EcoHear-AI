@@ -6,10 +6,14 @@ import numpy as np
 import librosa
 import joblib
 import tensorflow_hub as hub
+import google.generativeai as genai
 from datetime import datetime
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, Body
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
+from dotenv import load_dotenv
+load_dotenv()
 # ==========================================
 # 1. INITIALIZE FASTAPI & AI MODELS
 # ==========================================
@@ -30,6 +34,16 @@ yamnet_model = hub.load('https://tfhub.dev/google/yamnet/1')
 print("📦 Loading custom EcoHear models...")
 app_model = joblib.load('ecohear_custom_model.pkl')
 app_encoder = joblib.load('ecohear_label_encoder.pkl')
+
+# Initialize Google Gemini Configuration safely
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    chat_model = genai.GenerativeModel('gemini-2.5-flash')
+    print("🤖 EcoHear Gemini Model Link: CONNECTED")
+else:
+    chat_model = None
+    print("⚠️ EcoHear Gemini Model Link: OFFLINE (Missing GEMINI_API_KEY env variable)")
 
 DB_NAME = "ecohear.db"
 UPLOAD_DIR = "uploads"
@@ -57,9 +71,41 @@ def init_db():
 init_db()
 
 def process_audio(file_path):
-    # Librosa forces 16kHz and Mono channel as required by YAMNet
+    """
+    Standardizes incoming web audio to match the exact mathematical shape
+    used during the AI Training Lab script pipeline.
+    """
+    # Force strict 16kHz sampling rate and Mono down-mixing
     wav, _ = librosa.load(file_path, sr=16000, mono=True)
     return wav
+
+def get_db_summary_for_ai():
+    """
+    Reads the local SQLite database logs and formats them into a clean 
+    text summary so the Gemini model has full context of what happened.
+    """
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT prediction, confidence, alert, timestamp FROM history ORDER BY id DESC LIMIT 10")
+        rows = cursor.fetchall()
+        conn.close()
+        
+        if not rows:
+            return "No sound events have been captured yet. The station environment is currently clean, stable, and quiet."
+            
+        summary = "Recent Acoustic Event Data Logs at Edge Station Alpha:\n"
+        for row in rows:
+            status = "🚨 THREAT ALERT Triggered" if row["alert"] else "🌿 SAFE"
+            summary += f"- [{row['timestamp']}] {row['prediction']} detected with {int(row['confidence']*100)}% confidence ({status}).\n"
+        return summary
+    except Exception as e:
+        return f"System telemetry logs temporarily unavailable: {str(e)}"
+
+# Pydantic data schemas for API requests
+class ChatRequest(BaseModel):
+    message: str
 
 # ==========================================
 # 3. API ENDPOINTS
@@ -76,49 +122,50 @@ def health_check():
 async def predict_audio(file: UploadFile = File(...)):
     file_path = os.path.join(UPLOAD_DIR, file.filename)
     
-    # Save file to disk
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    # Securely write uploaded file to disk completely before any read actions occur
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        print(f"❌ File System Error: Failed to write uploaded file. {e}")
+        return {"error": f"File write error: {str(e)}"}
         
     # --- REAL ML INTEGRATION ---
-    # --- REAL ML INTEGRATION ---
     try:
-        # Analyze the audio
+        # Load and process the audio identically to the Training Lab environment
         wav_data = process_audio(file_path)
         scores, embeddings, spectrogram = yamnet_model(wav_data)
         
-        # Get features and predict
+        # Extract mean embedding features
         mean_embedding = np.mean(embeddings.numpy(), axis=0)
         features = mean_embedding.reshape(1, -1)
         predicted_number = app_model.predict(features)
         
-        # Convert prediction to text and title-case it for the UI
+        # Decode mapping tokens back to text representations
         raw_prediction_text = app_encoder.inverse_transform(predicted_number)[0]
         prediction = str(raw_prediction_text).title()
         
-        # Try to get real confidence score, default to 0.98 if model doesn't support probabilities
+        # Pull model output array probabilities safely
         if hasattr(app_model, "predict_proba"):
             probs = app_model.predict_proba(features)[0]
             confidence = float(max(probs))
         else:
             confidence = 0.98
 
-        # Determine Alert Status ONLY if the AI is highly confident (Greater than 75%)
+        # Determine Alert Status ONLY if the AI is highly confident (Greater than 40% based on update)
         danger_keywords = ["chainsaw", "gun", "gunshot", "engine", "vehicle", "poacher"]
         
         # 1. Check if the AI's prediction contains a danger word
         is_danger_sound = any(danger in prediction.lower() for danger in danger_keywords)
         
-        # 2. Trigger the alert ONLY if it's a danger sound AND confidence is high
-        alert = bool(is_danger_sound and (confidence > 0.75))
+        # 2. Trigger the alert ONLY if it's a danger sound AND confidence matches the target threshold
+        alert = bool(is_danger_sound and (confidence > 0.40))
 
     except Exception as e:
         print(f"❌ AI Processing Error: {e}")
-        return {"error": str(e)}
-    # ---------------------------
-    # ---------------------------
+        return {"error": f"AI model inference error: {str(e)}"}
 
-    # Save to SQLite Database
+    # Save cleanly executed predictions to SQLite Database
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -141,13 +188,11 @@ async def predict_audio(file: UploadFile = File(...)):
             "timestamp": timestamp
         }
         try:
-            # response = requests.post(CENTRAL_SERVER_URL, json=alert_payload, timeout=3)
-            print("✅ Successfully routed to Central Server.\n")
+            print("✅ Successfully routed alert metadata packet to Central Server.\n")
         except Exception as e:
             print(f"❌ Failed to reach Central Server: {e}\n")
     else:
         print(f"\n🌿 Normal sound ({prediction}). Kept locally on Edge Server to save bandwidth.\n")
-    # -------------------------------------------------
     
     return {
         "prediction": prediction,
@@ -176,3 +221,34 @@ def get_history():
         })
         
     return history_list
+
+@app.post("/chat")
+async def ecobot_chat(payload: ChatRequest):
+    """
+    Connects EcoBot Chat interactions to Google Gemini, utilizing real-time 
+    SQLite logging matrices as ground-truth telemetry context.
+    """
+    if not chat_model:
+        return {"response": "EcoBot Intelligence Node is currently offline. Please verify that the GEMINI_API_KEY value is appended correctly to your environment variables file."}
+        
+    try:
+        # Fetch live database history matrix context
+        live_db_context = get_db_summary_for_ai()
+        
+        # Format the system directive schema injection
+        system_prompt = (
+            f"You are EcoBot, an advanced, highly specialized AI agent running on an edge deployment grid "
+            f"within the EcoHear.AI acoustic tracking network at Station Alpha (Kolkata region, Sector 4).\n\n"
+            f"Your job is to assist wildlife patrol officers and rangers analyze real-time sound logs, audit threat trends, "
+            f"and evaluate general environmental safety indices. Keep your responses precise, professional, helpful, and alert.\n\n"
+            f"CURRENT LIVE STATION DATA LOGS:\n{live_db_context}\n\n"
+            f"Ranger Officer Query: {payload.message}\n"
+            f"EcoBot Intelligence Response:"
+        )
+        
+        response = chat_model.generate_content(system_prompt)
+        return {"response": response.text}
+        
+    except Exception as e:
+        print(f"❌ EcoBot Inference Crash: {e}")
+        return {"response": f"EcoBot telemetry uplink dropped. Diagnostic error: {str(e)}"}

@@ -13,7 +13,7 @@ const BiodiversityScore = ({ logs = [] }) => {
   
   // 2. Safely filter for real animals (Fixing the uppercase/lowercase bug!)
   const safeLogs = logs.filter(log => {
-    if (log.alert) return false; // Ignore threats
+    if (!log || log.alert) return false; // Ignore threats or broken logs
     const pred = log.prediction ? log.prediction.toLowerCase() : '';
     return !pred.includes('background'); // Safely ignore "Background", "background_noise", etc.
   });
@@ -22,9 +22,9 @@ const BiodiversityScore = ({ logs = [] }) => {
   const uniqueLiveSpeciesList = [...new Set(safeLogs.map(log => log.prediction))];
   const uniqueSpeciesCount = BASE_SPECIES + uniqueLiveSpeciesList.length;
 
-  // 4. Calculate Health Score: Drops by 7 points for every real threat uploaded
-  const threatCount = logs.filter(log => log.alert).length;
-  const ecosystemHealth = Math.max(0, BASE_HEALTH - (threatCount *5 ));
+  // 4. Calculate Health Score: Drops by 5 points for every real threat uploaded
+  const threatCount = logs.filter(log => log && log.alert).length;
+  const ecosystemHealth = Math.max(0, BASE_HEALTH - (threatCount * 5));
 
   // Determine trend text
   const isHealthy = ecosystemHealth >= 80;
@@ -62,7 +62,7 @@ const BiodiversityScore = ({ logs = [] }) => {
           {/* Dynamically display the latest animal found! */}
           {uniqueLiveSpeciesList.length > 0 && (
             <div className="text-xs text-[#20C997] mt-3 bg-[#20C997]/10 inline-block px-2 py-1 rounded">
-              Latest: {uniqueLiveSpeciesList[0].toUpperCase()}
+              Latest: {String(uniqueLiveSpeciesList[0]).toUpperCase()}
             </div>
           )}
         </motion.div>

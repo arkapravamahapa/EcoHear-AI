@@ -1,6 +1,5 @@
 import axios from 'axios';
 
-// Changed port from 5000 to 8000 to match your FastAPI backend
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const api = axios.create({
@@ -12,7 +11,6 @@ const api = axios.create({
 
 export const predictAudio = async (audioFile) => {
   const formData = new FormData();
-  // Changed field name from 'audio' to 'file' to match FastAPI backend (UploadFile = File(...))
   formData.append('file', audioFile);
 
   try {
@@ -21,7 +19,7 @@ export const predictAudio = async (audioFile) => {
     });
     return response.data;
   } catch (error) {
-    console.error("API Error:", error);
+    console.error("API Error during prediction:", error);
     throw error;
   }
 };
@@ -31,7 +29,17 @@ export const getDetectionHistory = async () => {
     const response = await api.get('/history');
     return response.data;
   } catch (error) {
-    console.error("API Error:", error);
+    console.error("API Error during history fetch:", error);
+    throw error;
+  }
+};
+
+export const sendChatMessage = async (message) => {
+  try {
+    const response = await api.post('/chat', { message });
+    return response.data;
+  } catch (error) {
+    console.error("Chat API Error:", error);
     throw error;
   }
 };

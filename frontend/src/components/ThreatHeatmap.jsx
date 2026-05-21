@@ -1,10 +1,16 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Map, Crosshair, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const ThreatHeatmap = ({ logs = [] }) => {
-  // Filter out only the active threats from your live AI data
-  const activeAlerts = logs.filter(log => log.alert === true);
+  // NEW: Keep active threats in a local state that React can force to re-render
+  const [activeAlerts, setActiveAlerts] = useState([]);
+
+  // NEW: Every single time the main history array changes, recalculate positions immediately
+  useEffect(() => {
+    const threatsOnly = logs.filter(log => log.alert === true);
+    setActiveAlerts(threatsOnly);
+  }, [logs]); // Crucial: This dependency array forces the update
 
   return (
     <div className="bg-white/5 backdrop-blur-md border border-white/10 shadow-2xl rounded-2xl p-6 mt-6 max-w-5xl mx-auto h-[600px] flex flex-col">
@@ -32,9 +38,9 @@ const ThreatHeatmap = ({ logs = [] }) => {
 
         {/* Dynamic Threat Nodes from Live Data */}
         {activeAlerts.map((alert, index) => {
-          // Generate somewhat random positions for the demo, based on the index
-          const topPos = 60 + (index * 10 > 30 ? 0 : index * 10);
-          const leftPos = 65 - (index * 15 > 40 ? 0 : index * 15);
+          // Use index to predictably scatter multiple threats onto different grid sectors
+          const topPos = 65 - ((index * 12) % 35);
+          const leftPos = 55 + ((index * 18) % 35);
           
           return (
             <motion.div 
@@ -50,7 +56,7 @@ const ThreatHeatmap = ({ logs = [] }) => {
                   <AlertCircle className="w-3 h-3 text-white" />
                 </div>
               </div>
-              <span className="text-[10px] text-red-400 mt-2 font-mono font-bold bg-red-950/80 px-2 py-0.5 rounded border border-red-500/30">
+              <span className="text-[10px] text-red-400 mt-2 font-mono font-bold bg-red-950/80 px-2 py-0.5 rounded border border-red-500/30 whitespace-nowrap">
                 {alert.prediction.toUpperCase()}
               </span>
             </motion.div>

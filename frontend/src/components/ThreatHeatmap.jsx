@@ -1,39 +1,61 @@
 import React from 'react';
-import { Map, Crosshair } from 'lucide-react';
+import { Map, Crosshair, AlertCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
 
-const ThreatHeatmap = () => {
+const ThreatHeatmap = ({ logs = [] }) => {
+  // Filter out only the active threats from your live AI data
+  const activeAlerts = logs.filter(log => log.alert === true);
+
   return (
-    <div className="bg-white/5 backdrop-blur-md border border-white/10 shadow-2xl rounded-2xl p-6 h-150 flex flex-col">
-      <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+    <div className="bg-white/5 backdrop-blur-md border border-white/10 shadow-2xl rounded-2xl p-6 mt-6 max-w-5xl mx-auto h-[600px] flex flex-col">
+      <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
         <Map className="text-[#20C997] size-5" /> Active Node Grid (Sector 4)
       </h2>
-      
-      <div className="relative flex-1 bg-[#040a06]/50 rounded-xl border border-white/5 overflow-hidden">
-        {/* Radar grid lines */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-size-[40px_40px]"></div>
-        
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-          <Crosshair className="size-32 text-white/10 animate-spin-slow" />
+
+      <div className="relative flex-1 bg-[#040a06]/60 rounded-xl overflow-hidden border border-white/5">
+        {/* Background Grid Lines */}
+        <div className="absolute inset-0" style={{ 
+          backgroundImage: 'linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)', 
+          backgroundSize: '40px 40px' 
+        }}></div>
+
+        {/* Center Crosshair */}
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white/10">
+          <Crosshair className="w-24 h-24" />
         </div>
 
-        {/* Mock Nodes */}
-        {/* Safe Node */}
-        <div className="absolute top-1/4 left-1/3 flex flex-col items-center">
-          <span className="relative flex size-4">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#20C997] opacity-75"></span>
-            <span className="relative inline-flex rounded-full size-4 bg-[#20C997]"></span>
-          </span>
-          <span className="text-[10px] text-[#20C997] mt-1 font-mono">Node_Alpha (Safe)</span>
+        {/* Static Edge Node (Your physical sensor) */}
+        <div className="absolute top-[40%] left-[45%] flex flex-col items-center">
+          <div className="w-4 h-4 bg-[#20C997] rounded-full shadow-[0_0_15px_#20c997]"></div>
+          <span className="text-[10px] text-[#20C997] mt-1 font-mono bg-black/50 px-2 py-0.5 rounded">Node_Alpha (Safe)</span>
         </div>
 
-        {/* Threat Node */}
-        <div className="absolute top-2/3 right-1/4 flex flex-col items-center">
-          <span className="relative flex size-5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
-            <span className="relative inline-flex rounded-full size-5 bg-red-500"></span>
-          </span>
-          <span className="text-[10px] text-red-400 mt-1 font-mono font-bold bg-red-500/10 px-1 rounded">THREAT DETECTED</span>
-        </div>
+        {/* Dynamic Threat Nodes from Live Data */}
+        {activeAlerts.map((alert, index) => {
+          // Generate somewhat random positions for the demo, based on the index
+          const topPos = 60 + (index * 10 > 30 ? 0 : index * 10);
+          const leftPos = 65 - (index * 15 > 40 ? 0 : index * 15);
+          
+          return (
+            <motion.div 
+              key={index}
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="absolute flex flex-col items-center"
+              style={{ top: `${topPos}%`, left: `${leftPos}%` }}
+            >
+              <div className="relative flex justify-center items-center">
+                <div className="absolute w-8 h-8 bg-red-500/30 rounded-full animate-ping"></div>
+                <div className="w-4 h-4 bg-red-500 rounded-full shadow-[0_0_15px_#ef4444] z-10 flex items-center justify-center">
+                  <AlertCircle className="w-3 h-3 text-white" />
+                </div>
+              </div>
+              <span className="text-[10px] text-red-400 mt-2 font-mono font-bold bg-red-950/80 px-2 py-0.5 rounded border border-red-500/30">
+                {alert.prediction.toUpperCase()}
+              </span>
+            </motion.div>
+          );
+        })}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Mic, Activity, History, ShieldCheck, User } from 'lucide-react';
 
@@ -12,30 +12,47 @@ import EcoBot from '../components/EcoBot';
 import AlertSystem from '../components/AlertSystem';
 import UserProfile from '../components/UserProfile';
 
+// NEW: Import the API call to fetch history on load
+import { getDetectionHistory } from '../services/api';
+
 const Dashboard = () => {
   // Navigation State
   const [activeTab, setActiveTab] = useState('overview');
   
   // Dashboard Core State
   const [latestResult, setLatestResult] = useState(null);
-  const [history, setHistory] = useState([
-    { prediction: 'Asian Elephant', confidence: 0.94, alert: false, timestamp: '13:05 PM' },
-    { prediction: 'Chainsaw (Sector 2)', confidence: 0.99, alert: true, timestamp: '12:42 PM' },
-    { prediction: 'Bird Chorus', confidence: 0.88, alert: false, timestamp: '11:15 AM' }
-  ]);
+  
+  // Start with an empty array instead of dummy data
+  const [history, setHistory] = useState([]);
+
+  // NEW: Fetch live database history when the app loads
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const dbHistory = await getDetectionHistory();
+        setHistory(dbHistory);
+      } catch (error) {
+        console.error("Failed to load initial history:", error);
+      }
+    };
+    loadHistory();
+  }, []);
 
   const handleNewPrediction = (result) => {
     setLatestResult(result);
+    // Add the new result to the top of the history list dynamically
     setHistory(prev => [result, ...prev]);
   };
 
   // Switch statement to render the correct view
   const renderContent = () => {
     switch(activeTab) {
-      case 'heatmap': return <ThreatHeatmap />;
-      case 'biodiversity': return <BiodiversityScore />;
+      // NEW: Pass the live history data into the Heatmap and Biodiversity components
+      case 'heatmap': return <ThreatHeatmap logs={history} />;
+      case 'biodiversity': return <BiodiversityScore logs={history} />;
       case 'chat': return <EcoBot />;
-      case 'alerts': return <AlertSystem />;
+      // NEW: Pass the live history data into the Alert System
+      case 'alerts': return <AlertSystem logs={history} />;
       case 'profile': return <UserProfile />;
       default: 
         return (

@@ -16,6 +16,12 @@ const AudioUploader = ({ onPredictionComplete }) => {
       // Call the real API connected to your backend
       const result = await predictAudio(file);
       
+      // NEW: Catch backend errors before they break the UI!
+      if (result.error) {
+        alert("Audio Format Error: Please ensure this is a true .wav file, not a renamed mp3.");
+        return; 
+      }
+      
       // Ensure we have a timestamp for the table
       const finalResult = {
         ...result,

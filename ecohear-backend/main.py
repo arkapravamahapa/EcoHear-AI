@@ -252,3 +252,46 @@ async def ecobot_chat(payload: ChatRequest):
     except Exception as e:
         print(f"❌ EcoBot Inference Crash: {e}")
         return {"response": f"EcoBot telemetry uplink dropped. Diagnostic error: {str(e)}"}
+    
+
+@app.get("/generate-patrol")
+async def generate_patrol_route():
+    """
+    Acts as a Tactical Commander AI. Analyzes the recent SQLite threat history 
+    and generates a predictive, 3-step physical patrol route using Gemini.
+    """
+    if not chat_model:
+        return {"route": "Strategic routing offline. Missing Gemini API key."}
+        
+    try:
+        # Fetch the last 20 verified THREATS to establish a pattern
+        conn = sqlite3.connect(DB_NAME)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT prediction, confidence, timestamp FROM history WHERE alert = 1 ORDER BY id DESC LIMIT 20")
+        rows = cursor.fetchall()
+        conn.close()
+        
+        if not rows:
+            return {"route": "Sector is currently clear. Proceed with standard randomized perimeter checks."}
+            
+        threat_summary = "Recent Confirmed Threats in Sector 4:\n"
+        for row in rows:
+            threat_summary += f"- [{row['timestamp']}] {row['prediction']} ({int(row['confidence']*100)}% confidence)\n"
+            
+        system_prompt = (
+            "You are the Tactical Commander AI for the EcoHear edge network in Sector 4. "
+            "Analyze the following recent acoustic threat logs. Identify any behavioral patterns "
+            "(e.g., chainsaws at night, repeated vehicles). \n\n"
+            "Based on this data, generate a highly strategic, actionable 3-step patrol route "
+            "for the ranger interception teams. Be concise, authoritative, and format the output "
+            "with short bullet points. Keep the entire response under 100 words.\n\n"
+            f"{threat_summary}"
+        )
+        
+        response = chat_model.generate_content(system_prompt)
+        return {"route": response.text}
+        
+    except Exception as e:
+        print(f"❌ Patrol Routing Error: {e}")
+        return {"route": f"Routing calculation failed: {str(e)}"}

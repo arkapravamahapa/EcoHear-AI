@@ -11,7 +11,7 @@ const UserProfile = () => {
         <div className="text-center md:text-left">
           <h2 className="text-3xl font-bold text-white font-['Instrument_Serif',serif]">Soumyadeep Das</h2>
           <p className="text-[#20C997] font-medium flex items-center justify-center md:justify-start gap-2 mt-1">
-            <Shield className="size-4" /> Lead Admin / Developer
+            <Shield className="size-4" /> Developer
           </p>
         </div>
       </div>
@@ -23,12 +23,9 @@ const UserProfile = () => {
         </div>
         <div className="flex items-center gap-4 text-emerald-100/70">
           <MapPin className="size-5 text-[#20C997]" />
-          <span>UEM Kolkata Base Station</span>
+          <span>kolkata</span>
         </div>
-        <div className="flex items-center gap-4 text-emerald-100/70">
-          <Settings className="size-5 text-[#20C997]" />
-          <span>System Preference: Edge Processing Node</span>
-        </div>
+    
       </div>
       
       <button className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-colors">

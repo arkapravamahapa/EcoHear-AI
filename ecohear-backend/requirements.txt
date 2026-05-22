@@ -1,11 +1,11 @@
 fastapi
 uvicorn
 python-multipart
-numpy
+numpy<2.0.0
 librosa
 joblib
 scikit-learn
-tensorflow-cpu
+tensorflow-cpu==2.15.0
 tensorflow-hub
 google-generativeai
 matplotlib

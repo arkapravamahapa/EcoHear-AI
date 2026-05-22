@@ -1,6 +1,4 @@
 # EcoHear-AI 🎧🌱
-
-
 Continuous autonomous eco-acoustic sensing built to protect tracking data pathways and detect resource threats.
 YouTube Demo Link:
 

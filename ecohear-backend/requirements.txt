@@ -3,6 +3,13 @@ uvicorn
 python-multipart
 databases
 scikit-learn
-librosa
 TensorFlow
 YAMNet
+numpy
+librosa
+joblib
+tensorflow
+tensorflow-hub
+google-generativeai
+matplotlib
+python-dotenv

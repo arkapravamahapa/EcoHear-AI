@@ -59,22 +59,22 @@ The user interface is a high-performance, state-preserving React application des
 <br>Styling & Data Visualization: Fully styled with Tailwind CSS and Framer Motion for smooth, cinematic animations. Complex data is rendered via custom interactive matrices, including a color-coded Biodiversity Heatmap and a coordinate-mapped Sensor Network grid.
 
 # 🚀 Getting Started
-Prerequisites
+### Prerequisites
 Make sure you have the necessary runtime environments and package managers installed on your local machine to run the AI models and web servers.
-Installation & Run Instructions
+### Installation & Run Instructions
 Clone the repository:
-git clone https://github.com/arkapravamahapa/EcoHear-AI.git
-cd EcoHear-AI
-Setup the Backend & AI Environment:
+<br>git clone https://github.com/arkapravamahapa/EcoHear-AI.git
+<br>cd EcoHear-AI
+### Setup the Backend & AI Environment:
 cd ecohear-backend
 # Install dependencies
  pip install -r requirements.txt
 # Start the server
 uvicorn main:app --reload
 
-Setup the Frontend:
-cd ..
-cd frontend
+### Setup the Frontend:
+<br>cd ..
+<br>cd frontend
 # Install dependencies
 npm install
 # Start the client
@@ -115,9 +115,9 @@ graph TD
 
 # 📸 Screenshots
 ![EcoHear Dashboard Demo](./assets/AIpetrol.png)
-![EcoHear Dashboard Demo](./assets/overview.png)
-![EcoHear Dashboard Demo](./assets/sensor.png)
-![EcoHear Dashboard Demo](./assets/threatheatmap.png)
+<br>![EcoHear Dashboard Demo](./assets/overview.png)
+<br>![EcoHear Dashboard Demo](./assets/sensor.png)
+<br>![EcoHear Dashboard Demo](./assets/threatheatmap.png)
 
 
 # 🤝 The Team (Single Neuron)

@@ -1,6 +1,6 @@
 # EcoHear-AI 🎧🌱
 Continuous autonomous eco-acoustic sensing built to protect tracking data pathways and detect resource threats.
-YouTube Demo Link:
+YouTube Demo Link: https://youtu.be/wa1jqoQ5ncQ
 
 # 📌 The Problem:
 Monitoring biodiversity—the delicate balance of animals, birds, insects, and plants in an ecosystem—is critical for tracking species health and detecting illegal activities. However, traditional manual monitoring faces severe logistical roadblocks:

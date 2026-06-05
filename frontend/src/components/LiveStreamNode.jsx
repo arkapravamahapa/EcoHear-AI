@@ -80,7 +80,7 @@ const LiveStreamNode = ({ onStreamEventCaptured }) => {
     formData.append('file', blob, 'live_canopy_feed.webm');
 
     try {
-      const response = await fetch('http://localhost:8000/stream-predict', {
+      const response = await fetch('https://ecohear-api-zyms.onrender.com/stream-predict', {
         method: 'POST',
         body: formData,
       });

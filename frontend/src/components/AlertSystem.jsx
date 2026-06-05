@@ -42,7 +42,7 @@ const AlertSystem = ({ logs = [] }) => {
             // Construct the URL to fetch the image from your FastAPI backend
             // (Assuming your backend runs on port 8000)
             const filenameNoExt = alert.filename ? alert.filename.split('.')[0] : 'unknown';
-            const spectrogramUrl = `http://localhost:8000/uploads/${filenameNoExt}_spec.png`;
+            const spectrogramUrl = `https://ecohear-api-zyms.onrender.com/uploads/${filenameNoExt}_spec.png`;
 
             return (
               <div 

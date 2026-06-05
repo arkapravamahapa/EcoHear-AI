@@ -1,12 +1,9 @@
 fastapi
 uvicorn
 python-multipart
-numpy<2.0.0
-librosa
-joblib
-scikit-learn
-tensorflow-cpu==2.15.0
-tensorflow-hub
 google-generativeai
-matplotlib
-python-dotenv
+pydantic
+# Add any other libraries you used for YAMNet, SMOTE, or your Random Forest
+tensorflow
+scikit-learn
+numpy

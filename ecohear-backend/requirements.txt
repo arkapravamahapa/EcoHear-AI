@@ -4,8 +4,11 @@ python-multipart
 google-generativeai
 pydantic
 tensorflow
+tensorflow-hub
 scikit-learn
 numpy
 librosa
-tensorflow-hub
 matplotlib
+requests
+joblib
+python-dotenv

@@ -3,7 +3,7 @@ uvicorn
 python-multipart
 google-generativeai
 pydantic
-# Add any other libraries you used for YAMNet, SMOTE, or your Random Forest
 tensorflow
 scikit-learn
 numpy
+librosa

@@ -16,6 +16,7 @@ from datetime import datetime
 from fastapi import FastAPI, File, UploadFile, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import gc # IMPORTING GARBAGE COLLECTOR FOR MEMORY MANAGEMENT
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -101,7 +102,13 @@ def generate_spectrogram(wav_data, original_filename):
         spec_path = os.path.join(UPLOAD_DIR, spec_filename)
         
         plt.savefig(spec_path, bbox_inches='tight', pad_inches=0, facecolor='#050a08')
-        plt.close()
+        
+        # AGGRESSIVE MEMORY CLEANUP
+        plt.clf() 
+        plt.close('all')
+        del S, S_dB
+        gc.collect()
+        
         print(f"📸 Visual Proof Generated: {spec_filename}")
     except Exception as e:
         print(f"❌ Spectrogram Generation Error: {e}")
@@ -172,6 +179,10 @@ async def predict_audio(file: UploadFile = File(...)):
         is_danger_sound = any(danger in prediction.lower() for danger in danger_keywords)
         alert = bool(is_danger_sound and (confidence > 0.40))
 
+        # AGGRESSIVE MEMORY CLEANUP
+        del wav_data, scores, embeddings, spectrogram, features, mean_embedding
+        gc.collect()
+
     except Exception as e:
         print(f"❌ AI Processing Error: {e}")
         return {"error": f"AI model inference error: {str(e)}"}
@@ -201,7 +212,6 @@ async def stream_predict_audio(file: UploadFile = File(...)):
     Accepts live chunked microphone data, routes it directly to Google Gemini's 
     multimodal framework for immediate extraction, saves metrics to SQLite, and renders maps.
     """
-    # 🚨 CRITICAL FIX: Save correctly as .webm based on frontend fix
     stream_id = f"stream_{int(datetime.now().timestamp())}"
     file_filename = f"{stream_id}.webm"
     file_path = os.path.join(UPLOAD_DIR, file_filename)
@@ -210,17 +220,18 @@ async def stream_predict_audio(file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # 🚨 CRITICAL FIX: Isolate the spectrogram so it doesn't crash the server if Windows fails to read the webm chunk
         try:
             wav_data = process_audio(file_path)
             generate_spectrogram(wav_data, file_filename)
+            # AGGRESSIVE MEMORY CLEANUP
+            del wav_data
+            gc.collect()
         except Exception as spec_err:
             print(f"⚠️ Note: Skipped spectrogram for live stream chunk: {spec_err}")
         
         if not chat_model:
             return {"prediction": "Ambient Noise", "confidence": 0.95, "alert": False, "filename": file_filename}
             
-        # 2. Multimodal AI Verification: Send raw sound to Gemini
         raw_audio_data = open(file_path, "rb").read()
         
         prompt = (
@@ -233,13 +244,11 @@ async def stream_predict_audio(file: UploadFile = File(...)):
             '{"prediction": "Gunshot", "confidence": 0.97, "alert": true}'
         )
         
-        # 🚨 CRITICAL FIX: Tell Gemini explicitly that the data is webm!
         response = chat_model.generate_content([
             {"mime_type": "audio/webm", "data": raw_audio_data},
             prompt
         ])
         
-        # Parse Gemini's programmatic response structure safely
         import json
         clean_json_text = response.text.replace("```json", "").replace("```", "").strip()
         ai_data = json.loads(clean_json_text)
@@ -248,12 +257,14 @@ async def stream_predict_audio(file: UploadFile = File(...)):
         confidence = float(ai_data.get("confidence", 0.92))
         alert = bool(ai_data.get("alert", False))
         
+        # AGGRESSIVE MEMORY CLEANUP
+        del raw_audio_data, response
+        gc.collect()
+        
     except Exception as e:
         print(f"❌ Streaming Analysis Node Failure: {e}")
-        # Soft fallback if stream chunk is completely empty/silent
         prediction, confidence, alert = "Ambient Noise", 0.90, False
 
-    # Save to ground-truth centralized SQLite ledger
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()

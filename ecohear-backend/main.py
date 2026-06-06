@@ -4,6 +4,7 @@ import sqlite3
 import requests
 import numpy as np
 import librosa
+import soundfile as sf  # <--- NEW: BULLETPROOF AUDIO READER
 import joblib
 import tensorflow_hub as hub
 import google.generativeai as genai
@@ -12,7 +13,7 @@ from datetime import datetime
 from fastapi import FastAPI, File, UploadFile, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import gc # IMPORTING GARBAGE COLLECTOR FOR MEMORY MANAGEMENT
+import gc 
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -21,10 +22,8 @@ load_dotenv()
 # ==========================================
 app = FastAPI(title="EcoHear AI Backend")
 
-# This makes the "uploads" folder accessible via web URL
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-# Enable CORS for frontend integration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  
@@ -40,7 +39,6 @@ print("📦 Loading custom EcoHear models...")
 app_model = joblib.load('ecohear_custom_model.pkl')
 app_encoder = joblib.load('ecohear_label_encoder.pkl')
 
-# Initialize Google Gemini Configuration safely
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
@@ -77,17 +75,31 @@ init_db()
 
 def process_audio(file_path):
     """
-    Standardizes incoming web audio to match the exact mathematical shape
-    used during the AI Training Lab script pipeline.
+    BULLETPROOF AUDIO PIPELINE:
+    Uses soundfile to read raw data safely, then uses librosa 
+    to force it into the 16kHz mono format YAMNet demands.
     """
-    wav, _ = librosa.load(file_path, sr=16000, mono=True)
-    return wav
+    try:
+        # 1. Read raw audio safely
+        data, samplerate = sf.read(file_path)
+        
+        # 2. Convert stereo to mono if necessary
+        if len(data.shape) > 1:
+            data = np.mean(data, axis=1)
+            
+        # 3. Force resample to 16000Hz for YAMNet
+        if samplerate != 16000:
+            wav = librosa.resample(y=data, orig_sr=samplerate, target_sr=16000)
+        else:
+            wav = data
+            
+        return wav.astype(np.float32)
+        
+    except Exception as e:
+        print(f"❌ Critical Audio Read Error: {e}")
+        raise ValueError(f"Could not read audio file mathematically. {e}")
 
 def generate_spectrogram(wav_data, original_filename):
-    """
-    🚨 LOW MEMORY MODE: Spectrogram image generation is disabled.
-    Drawing images while running TensorFlow exceeds the 512MB Free Tier limit.
-    """
     print(f"📸 Spectrogram bypassed for {original_filename} to save RAM.")
     pass
 
@@ -136,35 +148,35 @@ async def predict_audio(file: UploadFile = File(...)):
         return {"error": f"File write error: {str(e)}"}
         
     try:
-        # 🛑 DUMMY DATA BYPASS - Commenting out heavy AI math to test server
-        # wav_data = process_audio(file_path)
-        # generate_spectrogram(wav_data, file.filename)
-        # scores, embeddings, spectrogram = yamnet_model(wav_data)
+        # THE AI PIPELINE IS BACK ONLINE
+        print(f"🎵 Processing audio: {file.filename}")
+        wav_data = process_audio(file_path)
         
-        # mean_embedding = np.mean(embeddings.numpy(), axis=0)
-        # features = mean_embedding.reshape(1, -1)
-        # predicted_number = app_model.predict(features)
+        print("🧠 Running YAMNet...")
+        scores, embeddings, spectrogram = yamnet_model(wav_data)
         
-        # raw_prediction_text = app_encoder.inverse_transform(predicted_number)[0]
-        # prediction = str(raw_prediction_text).title()
+        print("🌲 Running Custom Random Forest...")
+        mean_embedding = np.mean(embeddings.numpy(), axis=0)
+        features = mean_embedding.reshape(1, -1)
+        predicted_number = app_model.predict(features)
         
-        # if hasattr(app_model, "predict_proba"):
-        #     probs = app_model.predict_proba(features)[0]
-        #     confidence = float(max(probs))
-        # else:
-        #     confidence = 0.98
-
-        print(f"Bypassing AI for test: {file.filename}")
-        prediction = "Chainsaw Test"
-        confidence = 0.99
+        raw_prediction_text = app_encoder.inverse_transform(predicted_number)[0]
+        prediction = str(raw_prediction_text).title()
+        
+        if hasattr(app_model, "predict_proba"):
+            probs = app_model.predict_proba(features)[0]
+            confidence = float(max(probs))
+        else:
+            confidence = 0.98
 
         danger_keywords = ["chainsaw", "gun", "gunshot", "engine", "vehicle", "poacher"]
         is_danger_sound = any(danger in prediction.lower() for danger in danger_keywords)
         alert = bool(is_danger_sound and (confidence > 0.40))
 
-        # AGGRESSIVE MEMORY CLEANUP (Skipped for bypass since vars don't exist)
-        # del wav_data, scores, embeddings, spectrogram, features, mean_embedding
+        # AGGRESSIVE MEMORY CLEANUP
+        del wav_data, scores, embeddings, spectrogram, features, mean_embedding
         gc.collect()
+        print(f"✅ Prediction Complete: {prediction}")
 
     except Exception as e:
         print(f"❌ AI Processing Error: {e}")
@@ -188,13 +200,8 @@ async def predict_audio(file: UploadFile = File(...)):
         "timestamp": timestamp
     }
 
-# --- NEW CINEMATIC REAL-TIME LIVE AUDIO STREAM STREAMING ENDPOINT ---
 @app.post("/stream-predict")
 async def stream_predict_audio(file: UploadFile = File(...)):
-    """
-    Accepts live chunked microphone data, routes it directly to Google Gemini's 
-    multimodal framework for immediate extraction, saves metrics to SQLite, and renders maps.
-    """
     stream_id = f"stream_{int(datetime.now().timestamp())}"
     file_filename = f"{stream_id}.webm"
     file_path = os.path.join(UPLOAD_DIR, file_filename)
@@ -206,7 +213,6 @@ async def stream_predict_audio(file: UploadFile = File(...)):
         try:
             wav_data = process_audio(file_path)
             generate_spectrogram(wav_data, file_filename)
-            # AGGRESSIVE MEMORY CLEANUP
             del wav_data
             gc.collect()
         except Exception as spec_err:
@@ -240,7 +246,6 @@ async def stream_predict_audio(file: UploadFile = File(...)):
         confidence = float(ai_data.get("confidence", 0.92))
         alert = bool(ai_data.get("alert", False))
         
-        # AGGRESSIVE MEMORY CLEANUP
         del raw_audio_data, response
         gc.collect()
         

@@ -132,26 +132,31 @@ def health_check():
 
 @app.post("/predict")
 async def predict_audio(file: UploadFile = File(...)):
+    print(f"=======================================")
+    print(f"🚨 INCOMING REQUEST: {file.filename}")
+    
     file_path = os.path.join(UPLOAD_DIR, file.filename)
     try:
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+        print("🟢 STEP 1: File successfully saved to disk.")
     except Exception as e:
-        print(f"❌ File System Error: Failed to write uploaded file. {e}")
+        print(f"❌ ERROR AT STEP 1: {e}")
         return {"error": f"File write error: {str(e)}"}
         
     try:
-        print(f"🎵 Processing audio: {file.filename}")
+        print("🟢 STEP 2: Handing file to Librosa for processing...")
         wav_data = process_audio(file_path)
         
-        print("🧠 Running YAMNet...")
+        print("🟢 STEP 3: Librosa finished! Handing data to TensorFlow YAMNet...")
         scores, embeddings, spectrogram = yamnet_model(wav_data)
         
-        print("🌲 Running Custom Random Forest...")
+        print("🟢 STEP 4: YAMNet finished! Handing data to Random Forest...")
         mean_embedding = np.mean(embeddings.numpy(), axis=0)
         features = mean_embedding.reshape(1, -1)
         predicted_number = app_model.predict(features)
         
+        print("🟢 STEP 5: AI Predictions complete! Formatting results...")
         raw_prediction_text = app_encoder.inverse_transform(predicted_number)[0]
         prediction = str(raw_prediction_text).title()
         
@@ -165,14 +170,15 @@ async def predict_audio(file: UploadFile = File(...)):
         is_danger_sound = any(danger in prediction.lower() for danger in danger_keywords)
         alert = bool(is_danger_sound and (confidence > 0.40))
 
+        print("🟢 STEP 6: Cleaning up memory...")
         del wav_data, scores, embeddings, spectrogram, features, mean_embedding
         gc.collect()
-        print(f"✅ Prediction Complete: {prediction}")
 
     except Exception as e:
         print(f"❌ AI Processing Error: {e}")
         return {"error": f"AI model inference error: {str(e)}"}
 
+    print("🟢 STEP 7: Saving to SQLite Database...")
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -183,6 +189,9 @@ async def predict_audio(file: UploadFile = File(...)):
     conn.commit()
     conn.close()
     
+    print(f"✅ FINAL STEP: Sending {prediction} back to Vercel!")
+    print(f"=======================================")
+    
     return {
         "prediction": prediction,
         "confidence": round(confidence, 2),
@@ -190,7 +199,6 @@ async def predict_audio(file: UploadFile = File(...)):
         "filename": file.filename,
         "timestamp": timestamp
     }
-
 @app.post("/stream-predict")
 async def stream_predict_audio(file: UploadFile = File(...)):
     stream_id = f"stream_{int(datetime.now().timestamp())}"

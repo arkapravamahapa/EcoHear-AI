@@ -5,7 +5,7 @@ import requests
 import numpy as np
 import librosa
 import joblib
-import tensorflow as tf  # <--- IMPORTING CORE TF
+import tensorflow as tf
 import tensorflow_hub as hub
 import google.generativeai as genai
 from fastapi.staticfiles import StaticFiles
@@ -19,14 +19,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 🛑 CRITICAL MEMORY OPTIMIZATION FOR RENDER FREE TIER 🛑
-# This forces TensorFlow to use only 1 CPU thread. Without this, TF tries 
-# to allocate memory for dozens of threads and instantly crashes the server.
 tf.config.threading.set_inter_op_parallelism_threads(1)
 tf.config.threading.set_intra_op_parallelism_threads(1)
 # ==========================================
 
 # ==========================================
-# 1. INITIALIZE FASTAPI & AI MODELS
+# 1. INITIALIZE FASTAPI & GLOBALS
 # ==========================================
 app = FastAPI(title="EcoHear AI Backend")
 
@@ -40,21 +38,30 @@ app.add_middleware(
     allow_headers=["*"],  
 )
 
-print("🧠 Downloading/Loading YAMNet from Google (This may take a moment)...")
-yamnet_model = hub.load('https://tfhub.dev/google/yamnet/1')
-
-print("📦 Loading custom EcoHear models...")
-app_model = joblib.load('ecohear_custom_model.pkl')
-app_encoder = joblib.load('ecohear_label_encoder.pkl')
-
+# Set AI variables to None so they don't load during boot-up
+yamnet_model = None
+app_model = None
+app_encoder = None
+chat_model = None
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    chat_model = genai.GenerativeModel('gemini-2.5-flash')
-    print("🤖 EcoHear Gemini Model Link: CONNECTED")
-else:
-    chat_model = None
-    print("⚠️ EcoHear Gemini Model Link: OFFLINE (Missing GEMINI_API_KEY env variable)")
+
+def load_ai_models():
+    """LAZY LOADING: Only loads heavy AI models when a prediction is requested."""
+    global yamnet_model, app_model, app_encoder, chat_model
+    
+    if yamnet_model is None:
+        print("🧠 Lazy Loading YAMNet from Google...")
+        yamnet_model = hub.load('https://tfhub.dev/google/yamnet/1')
+        
+    if app_model is None:
+        print("📦 Lazy Loading custom EcoHear models...")
+        app_model = joblib.load('ecohear_custom_model.pkl')
+        app_encoder = joblib.load('ecohear_label_encoder.pkl')
+        
+    if chat_model is None and GEMINI_API_KEY:
+        genai.configure(api_key=GEMINI_API_KEY)
+        chat_model = genai.GenerativeModel('gemini-2.5-flash')
+        print("🤖 EcoHear Gemini Model Link: CONNECTED")
 
 DB_NAME = "ecohear.db"
 UPLOAD_DIR = "uploads"
@@ -82,9 +89,6 @@ def init_db():
 init_db()
 
 def process_audio(file_path):
-    """
-    Standard librosa pipeline, safely wrapped.
-    """
     try:
         wav, _ = librosa.load(file_path, sr=16000, mono=True)
         return wav
@@ -93,7 +97,6 @@ def process_audio(file_path):
         raise ValueError(f"Could not read audio file: {e}")
 
 def generate_spectrogram(wav_data, original_filename):
-    print(f"📸 Spectrogram bypassed for {original_filename} to save RAM.")
     pass
 
 def get_db_summary_for_ai():
@@ -145,6 +148,9 @@ async def predict_audio(file: UploadFile = File(...)):
         return {"error": f"File write error: {str(e)}"}
         
     try:
+        print("🟢 STEP 1.5: Checking if AI models are loaded...")
+        load_ai_models()
+        
         print("🟢 STEP 2: Handing file to Librosa for processing...")
         wav_data = process_audio(file_path)
         
@@ -199,6 +205,7 @@ async def predict_audio(file: UploadFile = File(...)):
         "filename": file.filename,
         "timestamp": timestamp
     }
+
 @app.post("/stream-predict")
 async def stream_predict_audio(file: UploadFile = File(...)):
     stream_id = f"stream_{int(datetime.now().timestamp())}"
@@ -210,12 +217,12 @@ async def stream_predict_audio(file: UploadFile = File(...)):
             shutil.copyfileobj(file.file, buffer)
             
         try:
+            load_ai_models()
             wav_data = process_audio(file_path)
-            generate_spectrogram(wav_data, file_filename)
             del wav_data
             gc.collect()
         except Exception as spec_err:
-            print(f"⚠️ Note: Skipped spectrogram for live stream chunk: {spec_err}")
+            print(f"⚠️ Note: Audio processing skipped for stream chunk: {spec_err}")
         
         if not chat_model:
             return {"prediction": "Ambient Noise", "confidence": 0.95, "alert": False, "filename": file_filename}
@@ -293,6 +300,7 @@ def get_history():
 
 @app.post("/chat")
 async def ecobot_chat(payload: ChatRequest):
+    load_ai_models()
     if not chat_model:
         return {"response": "EcoBot Intelligence Node is currently offline."}
     try:
@@ -313,6 +321,7 @@ async def ecobot_chat(payload: ChatRequest):
 
 @app.get("/generate-patrol")
 async def generate_patrol_route():
+    load_ai_models()
     if not chat_model:
         return {"route": "Strategic routing offline. Missing Gemini API key."}
     try:

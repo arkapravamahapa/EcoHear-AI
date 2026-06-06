@@ -3,12 +3,4 @@ uvicorn
 python-multipart
 google-generativeai
 pydantic
-tensorflow
-tensorflow-hub
-scikit-learn==1.7.2
-numpy
-librosa
-matplotlib
-requests
-joblib
 python-dotenv

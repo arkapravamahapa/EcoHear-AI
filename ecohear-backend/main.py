@@ -7,10 +7,6 @@ import librosa
 import joblib
 import tensorflow_hub as hub
 import google.generativeai as genai
-import matplotlib
-matplotlib.use('Agg') # Forces matplotlib to run silently in the background
-import matplotlib.pyplot as plt
-import librosa.display
 from fastapi.staticfiles import StaticFiles
 from datetime import datetime
 from fastapi import FastAPI, File, UploadFile, Body
@@ -89,29 +85,11 @@ def process_audio(file_path):
 
 def generate_spectrogram(wav_data, original_filename):
     """
-    Creates a 'Thermal X-Ray' image of the soundwave for visual proof.
+    🚨 LOW MEMORY MODE: Spectrogram image generation is disabled.
+    Drawing images while running TensorFlow exceeds the 512MB Free Tier limit.
     """
-    try:
-        plt.figure(figsize=(8, 2.5), facecolor='#050a08')
-        S = librosa.feature.melspectrogram(y=wav_data, sr=16000, n_mels=128, fmax=8000)
-        S_dB = librosa.power_to_db(S, ref=np.max)
-        librosa.display.specshow(S_dB, sr=16000, x_axis='time', y_axis='mel', fmax=8000, cmap='inferno')
-        plt.axis('off')
-        
-        spec_filename = f"{original_filename.split('.')[0]}_spec.png"
-        spec_path = os.path.join(UPLOAD_DIR, spec_filename)
-        
-        plt.savefig(spec_path, bbox_inches='tight', pad_inches=0, facecolor='#050a08')
-        
-        # AGGRESSIVE MEMORY CLEANUP
-        plt.clf() 
-        plt.close('all')
-        del S, S_dB
-        gc.collect()
-        
-        print(f"📸 Visual Proof Generated: {spec_filename}")
-    except Exception as e:
-        print(f"❌ Spectrogram Generation Error: {e}")
+    print(f"📸 Spectrogram bypassed for {original_filename} to save RAM.")
+    pass
 
 def get_db_summary_for_ai():
     try:

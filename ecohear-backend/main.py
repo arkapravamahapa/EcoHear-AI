@@ -5,13 +5,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 import shutil
 import sqlite3
-import requests
 import numpy as np
-import librosa
-import joblib
-import tensorflow as tf
-import tensorflow_hub as hub
-import google.generativeai as genai
 from fastapi.staticfiles import StaticFiles
 from datetime import datetime
 from fastapi import FastAPI, File, UploadFile, Body
@@ -21,11 +15,6 @@ import gc
 
 from dotenv import load_dotenv
 load_dotenv()
-
-# 🛑 CRITICAL MEMORY OPTIMIZATION FOR RENDER FREE TIER 🛑
-tf.config.threading.set_inter_op_parallelism_threads(1)
-tf.config.threading.set_intra_op_parallelism_threads(1)
-# ==========================================
 
 # ==========================================
 # 1. INITIALIZE FASTAPI & GLOBALS
@@ -50,22 +39,32 @@ chat_model = None
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 def load_ai_models():
-    """LAZY LOADING: Only loads heavy AI models when a prediction is requested."""
+    """ULTRA LAZY LOADING: Only imports heavy libraries when a prediction is requested."""
     global yamnet_model, app_model, app_encoder, chat_model
     
     if yamnet_model is None:
-        print("🧠 Lazy Loading YAMNet from Google...")
+        print("🧠 Importing TensorFlow and Lazy Loading YAMNet...")
+        import tensorflow as tf
+        import tensorflow_hub as hub
+        
+        # Apply memory limits immediately after import
+        tf.config.threading.set_inter_op_parallelism_threads(1)
+        tf.config.threading.set_intra_op_parallelism_threads(1)
+        
         yamnet_model = hub.load('https://tfhub.dev/google/yamnet/1')
         
     if app_model is None:
-        print("📦 Lazy Loading custom EcoHear models...")
+        print("📦 Importing Joblib and Lazy Loading custom EcoHear models...")
+        import joblib
         app_model = joblib.load('ecohear_custom_model.pkl')
         app_encoder = joblib.load('ecohear_label_encoder.pkl')
         
     if chat_model is None and GEMINI_API_KEY:
+        print("🤖 Connecting to Gemini...")
+        import google.generativeai as genai
         genai.configure(api_key=GEMINI_API_KEY)
         chat_model = genai.GenerativeModel('gemini-2.5-flash')
-        print("🤖 EcoHear Gemini Model Link: CONNECTED")
+        print("✅ EcoHear Gemini Model Link: CONNECTED")
 
 DB_NAME = "ecohear.db"
 UPLOAD_DIR = "uploads"
@@ -94,6 +93,7 @@ init_db()
 
 def process_audio(file_path):
     try:
+        import librosa # Import delayed until audio is actually processing
         wav, _ = librosa.load(file_path, sr=16000, mono=True)
         return wav
     except Exception as e:
@@ -233,6 +233,7 @@ async def stream_predict_audio(file: UploadFile = File(...)):
             
         raw_audio_data = open(file_path, "rb").read()
         
+        import google.generativeai as genai # Local import
         prompt = (
             "You are an expert audio classification node running inside an eco-acoustic monitoring grid. "
             "Listen to this audio chunk carefully. Identify if there is any environmental sound threat present. "
@@ -355,3 +356,12 @@ async def generate_patrol_route():
         return {"route": response.text}
     except Exception as e:
         return {"route": f"Routing calculation failed: {str(e)}"}
+
+# ==========================================
+# 🛑 PORT BINDING FIX FOR RENDER 🛑
+# ==========================================
+if __name__ == "__main__":
+    import uvicorn
+    # Render assigns a dynamic port. If it fails, default to 10000.
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)

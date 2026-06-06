@@ -12,4 +12,3 @@ matplotlib
 requests
 joblib
 python-dotenv
-soundfile==0.12.1

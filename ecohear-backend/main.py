@@ -4,8 +4,8 @@ import sqlite3
 import requests
 import numpy as np
 import librosa
-import soundfile as sf  # <--- NEW: BULLETPROOF AUDIO READER
 import joblib
+import tensorflow as tf  # <--- IMPORTING CORE TF
 import tensorflow_hub as hub
 import google.generativeai as genai
 from fastapi.staticfiles import StaticFiles
@@ -17,6 +17,14 @@ import gc
 
 from dotenv import load_dotenv
 load_dotenv()
+
+# 🛑 CRITICAL MEMORY OPTIMIZATION FOR RENDER FREE TIER 🛑
+# This forces TensorFlow to use only 1 CPU thread. Without this, TF tries 
+# to allocate memory for dozens of threads and instantly crashes the server.
+tf.config.threading.set_inter_op_parallelism_threads(1)
+tf.config.threading.set_intra_op_parallelism_threads(1)
+# ==========================================
+
 # ==========================================
 # 1. INITIALIZE FASTAPI & AI MODELS
 # ==========================================
@@ -75,29 +83,14 @@ init_db()
 
 def process_audio(file_path):
     """
-    BULLETPROOF AUDIO PIPELINE:
-    Uses soundfile to read raw data safely, then uses librosa 
-    to force it into the 16kHz mono format YAMNet demands.
+    Standard librosa pipeline, safely wrapped.
     """
     try:
-        # 1. Read raw audio safely
-        data, samplerate = sf.read(file_path)
-        
-        # 2. Convert stereo to mono if necessary
-        if len(data.shape) > 1:
-            data = np.mean(data, axis=1)
-            
-        # 3. Force resample to 16000Hz for YAMNet
-        if samplerate != 16000:
-            wav = librosa.resample(y=data, orig_sr=samplerate, target_sr=16000)
-        else:
-            wav = data
-            
-        return wav.astype(np.float32)
-        
+        wav, _ = librosa.load(file_path, sr=16000, mono=True)
+        return wav
     except Exception as e:
         print(f"❌ Critical Audio Read Error: {e}")
-        raise ValueError(f"Could not read audio file mathematically. {e}")
+        raise ValueError(f"Could not read audio file: {e}")
 
 def generate_spectrogram(wav_data, original_filename):
     print(f"📸 Spectrogram bypassed for {original_filename} to save RAM.")
@@ -148,7 +141,6 @@ async def predict_audio(file: UploadFile = File(...)):
         return {"error": f"File write error: {str(e)}"}
         
     try:
-        # THE AI PIPELINE IS BACK ONLINE
         print(f"🎵 Processing audio: {file.filename}")
         wav_data = process_audio(file_path)
         
@@ -173,7 +165,6 @@ async def predict_audio(file: UploadFile = File(...)):
         is_danger_sound = any(danger in prediction.lower() for danger in danger_keywords)
         alert = bool(is_danger_sound and (confidence > 0.40))
 
-        # AGGRESSIVE MEMORY CLEANUP
         del wav_data, scores, embeddings, spectrogram, features, mean_embedding
         gc.collect()
         print(f"✅ Prediction Complete: {prediction}")

@@ -5,7 +5,7 @@ google-generativeai
 pydantic
 tensorflow
 tensorflow-hub
-scikit-learn
+scikit-learn==1.8.0
 numpy
 librosa
 matplotlib

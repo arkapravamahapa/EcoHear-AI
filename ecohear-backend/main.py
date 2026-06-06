@@ -1,4 +1,8 @@
 import os
+
+# 🛑 DISABLE GPU DETECTION (Fixes the CUDA 303 Error)
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
 import shutil
 import sqlite3
 import requests

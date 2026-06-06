@@ -136,29 +136,34 @@ async def predict_audio(file: UploadFile = File(...)):
         return {"error": f"File write error: {str(e)}"}
         
     try:
-        wav_data = process_audio(file_path)
-        generate_spectrogram(wav_data, file.filename)
-        scores, embeddings, spectrogram = yamnet_model(wav_data)
+        # 🛑 DUMMY DATA BYPASS - Commenting out heavy AI math to test server
+        # wav_data = process_audio(file_path)
+        # generate_spectrogram(wav_data, file.filename)
+        # scores, embeddings, spectrogram = yamnet_model(wav_data)
         
-        mean_embedding = np.mean(embeddings.numpy(), axis=0)
-        features = mean_embedding.reshape(1, -1)
-        predicted_number = app_model.predict(features)
+        # mean_embedding = np.mean(embeddings.numpy(), axis=0)
+        # features = mean_embedding.reshape(1, -1)
+        # predicted_number = app_model.predict(features)
         
-        raw_prediction_text = app_encoder.inverse_transform(predicted_number)[0]
-        prediction = str(raw_prediction_text).title()
+        # raw_prediction_text = app_encoder.inverse_transform(predicted_number)[0]
+        # prediction = str(raw_prediction_text).title()
         
-        if hasattr(app_model, "predict_proba"):
-            probs = app_model.predict_proba(features)[0]
-            confidence = float(max(probs))
-        else:
-            confidence = 0.98
+        # if hasattr(app_model, "predict_proba"):
+        #     probs = app_model.predict_proba(features)[0]
+        #     confidence = float(max(probs))
+        # else:
+        #     confidence = 0.98
+
+        print(f"Bypassing AI for test: {file.filename}")
+        prediction = "Chainsaw Test"
+        confidence = 0.99
 
         danger_keywords = ["chainsaw", "gun", "gunshot", "engine", "vehicle", "poacher"]
         is_danger_sound = any(danger in prediction.lower() for danger in danger_keywords)
         alert = bool(is_danger_sound and (confidence > 0.40))
 
-        # AGGRESSIVE MEMORY CLEANUP
-        del wav_data, scores, embeddings, spectrogram, features, mean_embedding
+        # AGGRESSIVE MEMORY CLEANUP (Skipped for bypass since vars don't exist)
+        # del wav_data, scores, embeddings, spectrogram, features, mean_embedding
         gc.collect()
 
     except Exception as e:

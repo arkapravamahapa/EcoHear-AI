@@ -16,6 +16,11 @@ load_dotenv()
 # ==========================================
 app = FastAPI(title="EcoHear AI Backend (Lightweight Edition)")
 
+# 🚨 THE CRITICAL FIX: Create the folder FIRST
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# NOW it is safe to mount the folder
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.add_middleware(
@@ -39,8 +44,6 @@ else:
     print("⚠️ WARNING: GEMINI_API_KEY is missing!")
 
 DB_NAME = "ecohear.db"
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # ==========================================
 # 2. HELPER FUNCTIONS
